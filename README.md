@@ -89,20 +89,26 @@ from pyspark.sql import functions as F, types as T
 
 ```python
 # Filter on equals condition
-df = df.filter(df.is_adult == 'Y')
+df = df.filter(F.col('is_adult') == 'Y')
 
 # Filter on >, <, >=, <= condition
-df = df.filter(df.age > 25)
+df = df.filter(F.col('age') > 25)
 
 # Multiple conditions require parentheses around each condition
-df = df.filter((df.age > 25) & (df.is_adult == 'Y'))
+df = df.filter((F.col('age') > 25) & (F.col('is_adult') == 'Y'))
 
 # Compare against a list of allowed values
 df = df.filter(F.col('first_name').isin([3, 4, 7]))
 
 # Sort results
-df = df.orderBy(df.age.asc())
-df = df.orderBy(df.age.desc())
+df = df.orderBy(F.col('age').asc())
+df = df.orderBy(F.col('age').desc())
+
+# Sort by 'department' (ASC) and then 'salary' (DESC)
+df_sorted = df.orderBy(
+    F.col("department").asc(), 
+    F.col("salary").desc()
+)
 
 # Limit actual DataFrame to n rows (non-deterministic)
 df = df.limit(5)
