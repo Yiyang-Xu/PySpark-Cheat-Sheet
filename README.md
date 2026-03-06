@@ -78,26 +78,14 @@ pandas_df = df.toPandas()
 
 ## III. Data Transformation Patterns
 
-### 1. Pandas ↔ PySpark Mapping Table
-
-| **Operation**   | **Pandas**                     | **PySpark**                      |
-| --------------- | ------------------------------ | -------------------------------- |
-| **Filter**      | `df[df.a > 1]`                 | `df.filter(df.a > 1)`            |
-| **New Column**  | `df['b'] = 1`                  | `df.withColumn('b', F.lit(1))`   |
-| **Rename**      | `df.rename(columns={'a':'b'})` | `df.withColumnRenamed('a', 'b')` |
-| **Drop Nulls**  | `df.dropna()`                  | `df.na.drop()`                   |
-| **Fill Nulls**  | `df.fillna(0)`                 | `df.fillna(0)`                   |
-| **Aggregation** | `df.groupby('a').sum()`        | `df.groupBy('a').sum()`          |
-| **Join**        | `pd.merge(d1, d2, on='id')`    | `d1.join(d2, 'id')`              |
-
-### 2. Core Imports
+### 1. Core Imports
 
 ```python
 # Easily reference these as F.my_function() and T.my_type() below
 from pyspark.sql import functions as F, types as T
 ```
 
-### 3. Filtering & Sorting
+### 2. Filtering & Sorting
 
 ```python
 # Filter on equals condition
@@ -120,7 +108,7 @@ df = df.orderBy(df.age.desc())
 df = df.limit(5)
 ```
 
-### 4. Joins
+### 3. Joins
 
 ```python
 # Left join in another dataset
@@ -136,7 +124,7 @@ df = df.join(other_table, ['first_name', 'last_name'], 'left')
 df = df.join(F.broadcast(small_table), 'id', 'left')
 ```
 
-### 5. Column Operations
+### 4. Column Operations
 
 ```python
 # Add a new static column
@@ -168,7 +156,7 @@ for col in df.columns:
     df = df.withColumnRenamed(col, col.lower().replace(' ', '_').replace('-', '_'))
 ```
 
-### 6. Casting, Nulls & Duplicates
+### 5. Casting, Nulls & Duplicates
 
 ```python
 # Cast a column to a different type
