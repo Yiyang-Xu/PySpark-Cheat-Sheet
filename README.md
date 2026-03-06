@@ -1,202 +1,394 @@
-# PySpark Cheat Sheet
+# PySpark Cheatsheet (Pandas User Edition)
 
-A comprehensive, production-ready reference guide for the most commonly used patterns and functions in PySpark SQL.
+## I. Setup & I/O
 
-## 📑 Table of Contents
+### 1. Quickstart & Installation
 
-- [1. Quickstart & Basics](https://www.google.com/search?q=%231-quickstart--basics)
-- [2. Column & Row Operations](https://www.google.com/search?q=%232-column--row-operations)
-- [3. Logic Control & Conditionals](https://www.google.com/search?q=%233-logic-control--conditionals)
-- [4. Joins & Unions](https://www.google.com/search?q=%234-joins--unions)
-- [5. Aggregation & Window Functions](https://www.google.com/search?q=%235-aggregation--window-functions)
-- [6. Data Transformations](https://www.google.com/search?q=%236-data-transformations)
-  - [String Operations](https://www.google.com/search?q=%23string-operations)
-  - [Number Operations](https://www.google.com/search?q=%23number-operations)
-  - [Date & Timestamp](https://www.google.com/search?q=%23date--timestamp)
-  - [Array & Struct](https://www.google.com/search?q=%23array--struct)
-- [7. Advanced Operations & Optimization](https://www.google.com/search?q=%237-advanced-operations--optimization)
+Install on macOS:
 
-## 1. Quickstart & Basics
-
-### Setup
-
-```
+```bash
 brew install apache-spark && pip install pyspark
 ```
 
-### Initialize Session & Read
+### 2. Session & First DataFrame
 
-```
+```python
 from pyspark.sql import SparkSession
-from pyspark.sql import functions as F, types as T
 
-spark = SparkSession.builder.getOrCreate()
-df = spark.read.csv('/path/to/your/input/file')
+# Standard session initialization
+spark = SparkSession.builder.appName("MyApp").getOrCreate()
+
+# I/O options: 
+df = spark.read.csv('/path/to/your/input/file', header=True, inferSchema=True)
 ```
 
-### Inspection Tools
+### 3. Writing Data
 
+```python
+# Write output to disk
+df.write.csv('/path/to/your/output/file')
+df.write.mode("overwrite").parquet('/path/to/parquet') # Common production format
 ```
-df.show()           # Show preview
-df.printSchema()    # Get schema
-df.count()          # Get row count
-df.columns          # Get list of columns
-df.dtypes           # Get column types
 
-# Local Conversion (WARNING: In-memory)
+## II. DataFrame Inspection (Basics)
+
+### 1. Previewing Data
+
+```python
+# Show a preview (Default 20 rows)
+df.show()
+
+# Show preview of first / last n rows
+df.head(5)
+df.tail(5)
+```
+
+### 2. Metadata & Stats
+
+```python
+# Get columns
+df.columns
+
+# Get columns + column types
+df.dtypes
+
+# Get schema
+df.schema
+df.printSchema() # Human readable tree format
+
+# Get row count
+df.count()
+
+# Get column count
+len(df.columns)
+```
+
+### 3. Data Collection (In-Memory)
+
+```python
+# Get results (WARNING: in-memory) as list of PySpark Rows
+collected_rows = df.collect()
+
+# Get results (WARNING: in-memory) as list of Python dicts
+dicts = [row.asDict(recursive=True) for row in df.collect()]
+
+# Convert (WARNING: in-memory) to Pandas DataFrame
 pandas_df = df.toPandas()
-rows = df.collect()
 ```
 
-## 2. Column & Row Operations
+## III. Data Transformation Patterns
 
-### Selection & Filtering
+### 1. Pandas ↔ PySpark Mapping Table
 
+| **Operation**   | **Pandas**                     | **PySpark**                      |
+| --------------- | ------------------------------ | -------------------------------- |
+| **Filter**      | `df[df.a > 1]`                 | `df.filter(df.a > 1)`            |
+| **New Column**  | `df['b'] = 1`                  | `df.withColumn('b', F.lit(1))`   |
+| **Rename**      | `df.rename(columns={'a':'b'})` | `df.withColumnRenamed('a', 'b')` |
+| **Drop Nulls**  | `df.dropna()`                  | `df.na.drop()`                   |
+| **Fill Nulls**  | `df.fillna(0)`                 | `df.fillna(0)`                   |
+| **Aggregation** | `df.groupby('a').sum()`        | `df.groupBy('a').sum()`          |
+| **Join**        | `pd.merge(d1, d2, on='id')`    | `d1.join(d2, 'id')`              |
+
+### 2. Core Imports
+
+```python
+# Easily reference these as F.my_function() and T.my_type() below
+from pyspark.sql import functions as F, types as T
 ```
-# Filter conditions
+
+### 3. Filtering & Sorting
+
+```python
+# Filter on equals condition
+df = df.filter(df.is_adult == 'Y')
+
+# Filter on >, <, >=, <= condition
 df = df.filter(df.age > 25)
+
+# Multiple conditions require parentheses around each condition
 df = df.filter((df.age > 25) & (df.is_adult == 'Y'))
-df = df.filter(F.col('name').isin(['Alice', 'Bob']))
 
-# Sorting
-df = df.orderBy(F.col("department").asc(), F.col("salary").desc())
+# Compare against a list of allowed values
+df = df.filter(F.col('first_name').isin([3, 4, 7]))
+
+# Sort results
+df = df.orderBy(df.age.asc())
+df = df.orderBy(df.age.desc())
+
+# Limit actual DataFrame to n rows (non-deterministic)
+df = df.limit(5)
 ```
 
-### Column Manipulation
+### 4. Joins
 
+```python
+# Left join in another dataset
+df = df.join(person_lookup_table, 'person_id', 'left')
+
+# Match on different columns in left & right datasets
+df = df.join(other_table, df.id == other_table.person_id, 'left')
+
+# Match on multiple columns
+df = df.join(other_table, ['first_name', 'last_name'], 'left')
+
+# Optimized Join: Broadcast small tables to avoid Shuffling
+df = df.join(F.broadcast(small_table), 'id', 'left')
 ```
-# Add/Rename/Drop
+
+### 5. Column Operations
+
+```python
+# Add a new static column
 df = df.withColumn('status', F.lit('PASS'))
-df = df.withColumnRenamed('dob', 'date_of_birth')
-df = df.drop('mod_dt', 'mod_username')
 
-# Selection with Alias
-df = df.select('name', F.col('dob').alias('date_of_birth'))
-```
-
-### Deduplication
-
-```python
-df = df.distinct()
-df = df.dropDuplicates(['name', 'height'])
-```
-
-## 3. Logic Control & Conditionals
-
-### Case When (If-Then-Else)
-
-```python
+# Construct a new dynamic column (Equivalent to np.where)
 df = df.withColumn('full_name', F.when(
     (df.fname.isNotNull() & df.lname.isNotNull()), F.concat(df.fname, df.lname)
 ).otherwise(F.lit('N/A')))
+
+# Pick which columns to keep, optionally rename some
+df = df.select(
+    'name',
+    'age',
+    F.col('dob').alias('date_of_birth'),
+)
+
+# Remove columns
+df = df.drop('mod_dt', 'mod_username')
+
+# Rename a column
+df = df.withColumnRenamed('dob', 'date_of_birth')
+
+# Keep all the columns which also occur in another dataset
+df = df.select(*(F.col(c) for c in df2.columns))
+
+# Batch Rename/Clean Columns
+for col in df.columns:
+    df = df.withColumnRenamed(col, col.lower().replace(' ', '_').replace('-', '_'))
 ```
 
-### Handling Nulls
+### 6. Casting, Nulls & Duplicates
 
 ```python
-# Fill NA
-df = df.fillna({'first_name': 'Tom', 'age': 0})
+# Cast a column to a different type
+df = df.withColumn('price', df.price.cast(T.DoubleType()))
 
-# Coalesce (Pick first non-null)
+# Replace all nulls with a specific value
+df = df.fillna({
+    'first_name': 'Tom',
+    'age': 0,
+})
+
+# Take the first value that is not null
 df = df.withColumn('last_name', F.coalesce(df.last_name, df.surname, F.lit('N/A')))
 
-# Replace values
-df = df.replace({"": None}, subset=["name"]) # Empty string to Null
+# Drop duplicate rows in a dataset (distinct)
+df = df.dropDuplicates() 
+df = df.distinct()
+
+# Drop duplicate rows, but consider only specific columns
+df = df.dropDuplicates(['name', 'height'])
+
+# Replace empty strings with null (leave out subset keyword arg to replace in all columns)
+df = df.replace({"": None}, subset=["name"])
+
+# Convert Python/PySpark/NumPy NaN operator to null
+df = df.replace(float("nan"), None)
 ```
 
-## 4. Joins & Unions
+## IV. Data Types Specific Operations
+
+### 1. String Operations
+
+#### String Filters
 
 ```python
-# Join on single/multiple keys
-df = df.join(other_table, 'person_id', 'left')
-df = df.join(other_table, ['first_name', 'last_name'], 'left')
+# Contains, StartsWith, EndsWith
+df = df.filter(df.name.contains('o'))
+df = df.filter(df.name.startswith('Al'))
+df = df.filter(df.name.endswith('ice'))
 
-# Join on different column names
-df = df.join(other_table, df.id == other_table.person_id, 'left')
+# Null Checks
+df = df.filter(df.is_adult.isNull())
+df = df.filter(df.first_name.isNotNull())
 
-# Union (Append rows)
-df_all = df1.union(df2)
+# SQL Like & Regex
+df = df.filter(df.name.like('Al%'))
+df = df.filter(df.name.rlike('[A-Z]*ice$'))
+
+# Is In List
+df = df.filter(df.name.isin('Bob', 'Mike'))
 ```
 
-## 5. Aggregation & Window Functions
-
-### GroupBy Aggregations
+#### String Functions
 
 ```python
-df.groupBy('gender').agg(
-    F.max('age').alias('max_age'),
-    F.collect_set('name').alias('unique_names')
+# Substring, Trim, Pad
+df = df.withColumn('short_id', df.id.substr(0, 10))
+df = df.withColumn('name', F.trim(df.name))
+df = df.withColumn('id', F.lpad('id', 4, '0'))
+df = df.withColumn('id', F.ltrim('id'))
+
+# Concatenate
+df = df.withColumn('full_name', F.concat('fname', F.lit(' '), 'lname'))
+df = df.withColumn('full_name', F.concat_ws('-', 'fname', 'lname'))
+
+# Regex Operations
+df = df.withColumn('id', F.regexp_replace('id', '0F1(.*)', '1F1-$1'))
+df = df.withColumn('id', F.regexp_extract('id', '[0-9]*', 0))
+```
+
+### 2. Number Operations
+
+```python
+# Round, Floor, Ceil, Abs
+df = df.withColumn('price', F.round('price', 0))
+df = df.withColumn('price', F.floor('price'))
+df = df.withColumn('price', F.ceil('price'))
+df = df.withColumn('price', F.abs('price'))
+
+# Math Functions
+df = df.withColumn('exponential_growth', F.pow('x', 'y'))
+df = df.withColumn('least', F.least('subtotal', 'total'))
+df = df.withColumn('greatest', F.greatest('subtotal', 'total'))
+```
+
+### 3. Date & Timestamp Operations
+
+```python
+# Current Date & Conversion
+df = df.withColumn('current_date', F.current_date())
+df = df.withColumn('date_of_birth', F.to_date('date_of_birth', 'yyyy-MM-dd'))
+df = df.withColumn('time_of_birth', F.to_timestamp('time_of_birth', 'yyyy-MM-dd HH:mm:ss'))
+
+# Extraction (Year, Month, etc.)
+# F.year, F.month, F.dayofmonth, F.hour, F.minute, F.second
+df = df.filter(F.year('date_of_birth') == F.lit('2017'))
+
+# Date Arithmetic
+df = df.withColumn('three_days_after', F.date_add('date_of_birth', 3))
+df = df.withColumn('three_days_before', F.date_sub('date_of_birth', 3))
+df = df.withColumn('next_month', F.add_months('date_of_birth', 1))
+
+# Date Diff
+df = df.withColumn('days_between', F.datediff('end', 'start'))
+df = df.withColumn('months_between', F.months_between('start', 'end'))
+
+# Filtering by Date Range
+df = df.filter(
+    (F.col('date_of_birth') >= F.lit('2017-05-10')) &
+    (F.col('date_of_birth') <= F.lit('2018-07-21'))
 )
 ```
 
-### Window Functions (Ranking & Moving Metrics)
+### 4. Array & Struct Operations
+
+#### Arrays
+
+```python
+# Create, Size, GetItem
+df = df.withColumn('full_name', F.array('fname', 'lname'))
+df = df.withColumn('empty_array_column', F.array([]))
+df = df.withColumn('first_element', F.col("my_array").getItem(0))
+df = df.withColumn('array_length', F.size('my_array'))
+
+# Advanced Array
+df = df.withColumn('flattened', F.flatten('my_array'))
+df = df.withColumn('unique_elements', F.array_distinct('my_array'))
+df = df.withColumn('elem_ids', F.transform(F.col('my_array'), lambda x: x.getField('id')))
+
+# Explode (Array to Rows)
+df = df.select(F.explode('my_array'))
+```
+
+#### Structs
+
+```python
+# Create Struct
+df = df.withColumn('my_struct', F.struct(F.col('col_a'), F.col('col_b')))
+
+# Get Field
+df = df.withColumn('col_a', F.col('my_struct').getField('col_a'))
+```
+
+## V. Advanced & Analytics
+
+### 1. Aggregation Operations
+
+```python
+# Basic Aggs: F.count, F.sum, F.mean, F.max, F.min
+df = df.groupBy('gender').agg(F.max('age').alias('max_age_by_gender'))
+
+# Collect Aggs
+df = df.groupBy('age').agg(F.collect_set('name').alias('person_names'))
+df = df.groupBy('age').agg(F.collect_list('name').alias('person_names'))
+```
+
+### 2. Window Functions
 
 ```python
 from pyspark.sql import Window as W
 
-# Get latest row per group
-window = W.partitionBy("user_id").orderBy(F.desc("date"))
-df = df.withColumn("rn", F.row_number().over(window)).filter(F.col("rn") == 1).drop("rn")
+# Deduplication using Window
+window = W.partitionBy("first_name", "last_name").orderBy(F.desc("date"))
+df = df.withColumn("row_number", F.row_number().over(window))
+df = df.filter(F.col("row_number") == 1).drop("row_number")
 ```
 
-## 6. Data Transformations
-
-### String Operations
-
-- **Filters**: `contains()`, `startswith()`, `endswith()`, `like()`, `rlike()` (Regex).
-
-- **Functions**:
-
-  ```python
-  F.trim(col), F.lpad(col, 4, '0'), F.concat_ws('-', 'fname', 'lname')
-  F.regexp_replace(id, 'pattern', 'replacement')
-  F.regexp_extract(id, 'pattern', 0)
-  ```
-
-### Number Operations
+### 3. Performance & Optimization
 
 ```python
-F.round('price', 2), F.floor('price'), F.abs('price'), F.pow('x', 'y')
-F.greatest('col_a', 'col_b') # Max of multiple columns
+# Repartition – df.repartition(num_output_partitions)
+df = df.repartition(1)
+
+# Cache data in memory
+df.cache()
+df.unpersist() # Release memory
 ```
 
-### Date & Timestamp
+### 4. UDFs (User Defined Functions)
 
 ```python
-F.to_date('col', 'yyyy-MM-dd'), F.current_date()
-F.datediff('end', 'start'), F.add_months('date', 1)
-F.year('date'), F.month('date'), F.dayofmonth('date')
+# Multiply each row's age column by two
+times_two_udf = F.udf(lambda x: x * 2 if x is not None else None, T.IntegerType())
+df = df.withColumn('age', times_two_udf(df.age))
+
+# Randomly choose a value to use as a row's name
+import random
+random_name_udf = F.udf(lambda: random.choice(['Bob', 'Tom', 'Amy', 'Jenna']), T.StringType())
+df = df.withColumn('name', random_name_udf())
 ```
 
-### Array & Struct
+## VI. Useful Custom Utils
 
 ```python
-# Array
-df.withColumn('first_elem', F.col("my_array").getItem(0))
-df.select(F.explode('my_array')) # Row per element
+from pyspark.sql import DataFrame
 
-# Struct
-df.withColumn('my_struct', F.struct('col_a', 'col_b'))
-df.select(F.col('my_struct').getField('col_a'))
+def flatten(df: DataFrame, delimiter="_") -> DataFrame:
+    '''
+    Flatten nested struct columns in `df` by one level separated by `delimiter`.
+    '''
+    flat_cols = [name for name, type in df.dtypes if not type.startswith("struct")]
+    nested_cols = [name for name, type in df.dtypes if type.startswith("struct")]
+
+    flat_df = df.select(
+        flat_cols
+        + [F.col(nc + "." + c).alias(nc + delimiter + c) for nc in nested_cols for c in df.select(nc + ".*").columns]
+    )
+    return flat_df
+
+
+def lookup_and_replace(df1: DataFrame, df2: DataFrame, df1_key: str, df2_key: str, df2_value: str) -> DataFrame:
+    '''
+    Replace every value in `df1`'s `df1_key` column with the corresponding value
+    `df2_value` from `df2` where `df1_key` matches `df2_key`.
+    '''
+    return (
+        df1
+        .join(df2[[df2_key, df2_value]], df1[df1_key] == df2[df2_key], 'left')
+        .withColumn(df1_key, F.coalesce(F.col(df2_value), F.col(df1_key)))
+        .drop(df2_key)
+        .drop(df2_value)
+    )
 ```
-
-## 7. Advanced Operations & Optimization
-
-### Partitioning & Caching
-
-```python
-df = df.repartition(10) # Shuffle
-df = df.coalesce(1)     # Minimal shuffle (decrease only)
-df.cache()              # Persist in memory
-```
-
-### UDFs (User Defined Functions)
-
-```python
-times_two_udf = F.udf(lambda x: x * 2, T.IntegerType())
-df = df.withColumn('age_doubled', times_two_udf(df.age))
-```
-
-## Contributing
-
-If you can't find what you're looking for, check out the [PySpark Official Documentation](https://spark.apache.org/docs/latest/api/python/pyspark.sql.html) and submit a PR!
