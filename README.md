@@ -311,12 +311,19 @@ df = df.withColumn('col_a', F.col('my_struct').getField('col_a'))
 ### 1. Aggregation Operations
 
 ```python
-# Basic Aggs: F.count, F.sum, F.mean, F.max, F.min
+# Basic Aggs: F.count, F.sum, F.mean, F.max, F.min, F.countDistinct
 df = df.groupBy('gender').agg(F.max('age').alias('max_age_by_gender'))
 
 # Collect Aggs
 df = df.groupBy('age').agg(F.collect_set('name').alias('person_names'))
 df = df.groupBy('age').agg(F.collect_list('name').alias('person_names'))
+
+# Standard Multi-column Aggregation
+df_agg = df.groupBy('gender').agg(
+    F.max('age').alias("max_age"),
+    F.mean('salary').alias("avg_salary"),
+    F.countDistinct('person_id').alias("unique_users")
+)
 ```
 
 ### 2. Window Functions
@@ -330,7 +337,7 @@ window_agg = W.partitionBy(F.col("category"))
 
 # Calculate mean per group and attach back to every row
 # over(window_agg) tells the function to look at the defined group
-df = df.withColumn("avg_val", F.mean(F.col("value")).over(window_agg))
+df = df.withColumn("avg_val", F.mean("value").over(window_agg))
 ```
 
 ### 3. Performance & Optimization
