@@ -324,10 +324,13 @@ df = df.groupBy('age').agg(F.collect_list('name').alias('person_names'))
 ```python
 from pyspark.sql import Window as W
 
-# Deduplication using Window
-window = W.partitionBy("first_name", "last_name").orderBy(F.desc("date"))
-df = df.withColumn("row_number", F.row_number().over(window))
-df = df.filter(F.col("row_number") == 1).drop("row_number")
+# --- 1. Group Transform (Like Pandas groupby.transform) ---
+# Define the window: Group by category, this creates a group-level boundary for calculations
+window_agg = W.partitionBy(F.col("category"))
+
+# Calculate mean per group and attach back to every row
+# over(window_agg) tells the function to look at the defined group
+df = df.withColumn("avg_val", F.mean(F.col("value")).over(window_agg))
 ```
 
 ### 3. Performance & Optimization
