@@ -1,5 +1,9 @@
 # PySpark Cheatsheet (Pandas User Edition)
 
+[TOC]
+
+
+
 ## I. Setup & I/O
 
 ### 1. Quickstart & Installation
@@ -160,6 +164,23 @@ df = df.select(*(F.col(c) for c in df2.columns))
 # Batch Rename/Clean Columns
 for col in df.columns:
     df = df.withColumnRenamed(col, col.lower().replace(' ', '_').replace('-', '_'))
+    
+# Conditions Categorize (if-elif-else / np.select equivalent)
+df = df.withColumn(
+    "priority_level",
+    F.when(F.col("score") >= 90, "High")
+     .when(F.col("score") >= 60, "Medium")
+     .otherwise("Low")
+)
+
+# Handling Nulls and Math together
+df = df.withColumn(
+    "adjusted_salary",
+    F.when(F.col("salary").isNull(), 0)
+     .when(F.col("department") == "Sales", F.col("salary") * 1.1)
+     .otherwise(F.col("salary"))
+)
+
 ```
 
 ### 5. Casting, Nulls & Duplicates
